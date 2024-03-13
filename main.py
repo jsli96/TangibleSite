@@ -13,7 +13,7 @@ CORS(app)
 socketio = SocketIO(app, cors_allowed_origins='*')
 #socketio = SocketIO(app, cors_allowed_origins='*', logger=True, engineio_logger=True)
 # COMMENT FOR FAKE SERIAL ----------------------------------------------------------------
-serialPort = "COM4"
+serialPort = "COM3"
 ser = serial.Serial(serialPort, baudrate=9600, timeout=0.5)
 # COMMENT FOR FAKE SERIAL ----------------------------------------------------------------
 engine = pyttsx3.init()
@@ -64,7 +64,6 @@ def send_data():
             print("Waiting for response from arduino")
             socketio.sleep(0)
             continue  # Skip the rest of the loop and wait for more data
-        
         data = json.loads(line)
         print(data)
         bracket_id = data["ID"]
@@ -100,7 +99,7 @@ def send_data():
                 
                 manage_bracket(emit_data, action="delete")
                 
-        time.sleep(5)
+        # time.sleep(5)
 
 if __name__ == '__main__':
     socketio.run(app)
