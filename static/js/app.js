@@ -1,65 +1,98 @@
-/* --------------------------------- socket io stuff --------------------------------- */
-let socket = io();
+const requestOptions = {
+    method: "POST",
+    redirect: "follow",
+};
 
-socket.on('connect', function () {
-    socket.emit('web connected', 'Web page connected!');
-    socket.emit('get data');
-});
+fetch("/get_brackets", requestOptions)
+    .then((response) => response.json())
+    .then((result) => {
+        for (let i = 0; i < result.length; i++) {
+            let data = result[i];
+            updateBracket(data);
+        }
+    })
+    .catch((error) => console.error(error));
 
-// Listen for data transmit events from the server
-socket.on("data transmit", function(data) {
-    socket.emit('web connected', 'Data transmit received!');
-    let id = data.id;
-    console.log('Data received:', data);
+setInterval(() => {
+    fetch("/watch_brackets", requestOptions)
+        .then((response) => response.json())
+        .then((result) => {
+            updateBracket(result.fullDocument);
+        })
+        .catch((error) => console.error(error));
+}, 2000);
 
-    switch (data.type) {
-        case 'add':
-            switch (data.bracket) {
-                case 'text':
+function updateBracket(data) {
+    switch (data.status) {
+        case "Added":
+            switch (data.type) {
+                case "Text":
                     // If it exists and the delete flag is not set, prompt the user
-                    if (window.oldEditors[id]) { /* Fix up this part...we need to keep the text */
-                        let userChoice = confirm("A text bracket already exists. Click 'OK' to keep the existing text, or 'Cancel' to add new text.");
-                        if (!userChoice) { // The user chose to add new text, delete the old editor
-                            deleteTextbox(id);
+                    if (window.oldEditors[data.id]) {
+                        /* Fix up this part...we need to keep the text */
+                        let userChoice = confirm(
+                            "A text bracket already exists. Click 'OK' to keep the existing text, or 'Cancel' to add new text."
+                        );
+                        if (!userChoice) {
+                            // The user chose to add new text, delete the old editor
+                            deleteTextbox(data.id);
                         }
                     }
-                    createTextbox(data.x, data.y, data.h, data.w, id);
+                    createTextbox(
+                        data.top_left_row,
+                        data.top_left_col,
+                        data.width,
+                        data.length,
+                        data.id
+                    );
                     break;
-                case 'figure':
-                    createImageBox(data.x, data.y, data.h, data.w, id);
+                case "Image":
+                    createImageBox(
+                        data.top_left_row,
+                        data.top_left_col,
+                        data.width,
+                        data.length,
+                        data.id
+                    );
                     break;
-                case 'video':
-                    createVideoBox(data.x, data.y, data.h, data.w, id);
+                case "Video":
+                    createVideoBox(
+                        data.top_left_row,
+                        data.top_left_col,
+                        data.width,
+                        data.length,
+                        data.id
+                    );
                     break;
                 default:
-                    console.log('Unknown bracket type for add');
+                    console.log("Unknown bracket type for add");
             }
             break;
-        case 'delete':
-            switch (data.bracket) {
-                case 'text':
-                    console.log('Textbox deleting');
-                    deleteTextbox(id);
+        case "Removed":
+            switch (data.type) {
+                case "Text":
+                    console.log("Textbox deleting");
+                    deleteTextbox(data.id);
                     break;
-                case 'figure':
-                    console.log('Image box deleting');
-                    deleteImageBox(id);
+                case "Images":
+                    console.log("Image box deleting");
+                    deleteImageBox(data.id);
                     break;
-                case 'video':
-                    console.log('Video box deleting');
-                    deleteVideoBox(id);
+                case "Video":
+                    console.log("Video box deleting");
+                    deleteVideoBox(data.id);
                     break;
                 default:
-                    console.log('Unknown bracket type for delete');
+                    console.log("Unknown bracket type for delete");
             }
             break;
         default:
-            console.log('Unknown data type');
+            console.log("Unknown data type");
     }
-});
+}
 
 /* --------------------------------- webpage startup --------------------------------- */
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener("DOMContentLoaded", function () {
     window.oldEditors = {};
     window.editors = {}; // Store editors
     window.activeEditor = null; // Track active editor
@@ -69,43 +102,48 @@ document.addEventListener('DOMContentLoaded', function() {
 /* --------------------------------- toolbar --------------------------------- */
 // Update toolbar to affect active editor
 var toolbarOptions = [
-    ['bold', 'italic'],
-    [{'size': ['small', false, 'large', 'huge']}],
-    [{'color': []}],
-    [{'font': []}]
+    ["bold", "italic"],
+    [{ size: ["small", false, "large", "huge"] }],
+    [{ color: [] }],
+    [{ font: [] }],
 ];
 
-var toolbar = document.getElementById('toolbar');
+var toolbar = document.getElementById("toolbar");
 
 /* Record button */
-document.getElementById('start-record-btn').addEventListener('click', function() {
-    var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
-    var recognition = new SpeechRecognition();
+document
+    .getElementById("start-record-btn")
+    .addEventListener("click", function () {
+        var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
+        var recognition = new SpeechRecognition();
 
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
 
-    recognition.start();
+        recognition.start();
 
-    recognition.onresult = function(event) {
-        var speechToText = event.results[0][0].transcript;
-        if (window.activeEditor) {
-            window.activeEditor.insertText(window.activeEditor.getLength(), speechToText);
-        }
-    };
+        recognition.onresult = function (event) {
+            var speechToText = event.results[0][0].transcript;
+            if (window.activeEditor) {
+                window.activeEditor.insertText(
+                    window.activeEditor.getLength(),
+                    speechToText
+                );
+            }
+        };
 
-    recognition.onspeechend = function() {
-        recognition.stop();
-    };
+        recognition.onspeechend = function () {
+            recognition.stop();
+        };
 
-    recognition.onerror = function(event) {
-        console.error('Speech recognition error', event.error);
-    };
-});
+        recognition.onerror = function (event) {
+            console.error("Speech recognition error", event.error);
+        };
+    });
 
-document.getElementById('toolbar').addEventListener('click', function(event) {
-    if (event.target.id === 'start-record-btn') {
+document.getElementById("toolbar").addEventListener("click", function (event) {
+    if (event.target.id === "start-record-btn") {
         if (window.activeEditor) {
             // Ignore for now - might not need it
         }
@@ -128,12 +166,12 @@ function createTextbox(x, y, h, w, id) {
 
     const editorId = `editor-${id}`;
 
-    const editorDiv = document.createElement('div');
-    editorDiv.classList.add('editor');
-    editorDiv.style.position = 'absolute';
-    const container = document.getElementById('container');
+    const editorDiv = document.createElement("div");
+    editorDiv.classList.add("editor");
+    editorDiv.style.position = "absolute";
+    const container = document.getElementById("container");
     const containerRect = container.getBoundingClientRect();
-    
+
     // Position
     editorDiv.style.left = `${(y / 12) * containerRect.width}px`;
     editorDiv.style.top = `${(x / 16) * containerRect.height}px`;
@@ -143,17 +181,17 @@ function createTextbox(x, y, h, w, id) {
     container.appendChild(editorDiv);
 
     const newEditor = new Quill(editorDiv, {
-        theme: 'snow',
+        theme: "snow",
         modules: {
-            toolbar: '#toolbar'
-        }
+            toolbar: "#toolbar",
+        },
     });
 
     // Store reference to the editor
     window.editors[editorId] = newEditor;
 
     // Set this editor as active when clicked
-    editorDiv.addEventListener('click', function(e) {
+    editorDiv.addEventListener("click", function (e) {
         e.stopPropagation(); // Prevent triggering container's click event
         window.activeEditor = window.editors[editorId]; // Set the clicked editor as active
         window.activeEditorId = editorId; // Update activeEditorId to match the clicked editor
@@ -165,12 +203,12 @@ function createTextbox(x, y, h, w, id) {
 
 function updateEditorStyles() {
     // Iterate through all editors to reset their styles
-    Object.keys(window.editors).forEach(id => {
+    Object.keys(window.editors).forEach((id) => {
         const editorElement = window.editors[id].container.firstChild;
         if (id === window.activeEditorId) {
-            editorElement.style.border = '2px solid #000';
+            editorElement.style.border = "2px solid #000";
         } else {
-            editorElement.style.border = '1px solid #ccc';
+            editorElement.style.border = "1px solid #ccc";
         }
     });
 }
@@ -196,13 +234,13 @@ function deleteTextbox(id) {
 function createImageBox(x, y, h, w, id) {
     const boxId = `image-box-${id}`;
     //const boxId = `image-box-${Object.keys(window.editors).length}`;
-    const imageBox = document.createElement('div');
+    const imageBox = document.createElement("div");
     imageBox.id = boxId;
-    imageBox.classList.add('image-box');
-    imageBox.style.position = 'absolute';
+    imageBox.classList.add("image-box");
+    imageBox.style.position = "absolute";
 
     // Calculate position and size based on container dimensions and provided data
-    const container = document.getElementById('container');
+    const container = document.getElementById("container");
     const containerRect = container.getBoundingClientRect();
 
     imageBox.style.left = `${(y / 12) * containerRect.width}px`;
@@ -210,28 +248,28 @@ function createImageBox(x, y, h, w, id) {
     imageBox.style.width = `${(w / 12) * containerRect.width}px`;
     imageBox.style.height = `${(h / 16) * containerRect.height}px`;
 
-    imageBox.style.border = '1px dashed #ccc'; // A dashed border for the box
-    imageBox.style.cursor = 'pointer';
+    imageBox.style.border = "1px dashed #ccc"; // A dashed border for the box
+    imageBox.style.cursor = "pointer";
     imageBox.title = "Click to upload an image";
 
     // Continue with the rest of your function for setting up the file input and image upload
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'image/*'; // Accept images only
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "image/*"; // Accept images only
     fileInput.style.opacity = 0; // Hide the file input
     //fileInput.style.position = 'absolute';
-    fileInput.style.width = '100%';
-    fileInput.style.height = '100%';
+    fileInput.style.width = "100%";
+    fileInput.style.height = "100%";
 
-    fileInput.addEventListener('change', function() {
+    fileInput.addEventListener("change", function () {
         if (this.files && this.files[0]) {
             const reader = new FileReader();
 
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 // Set the image as the background of the box
                 imageBox.style.backgroundImage = `url(${e.target.result})`;
-                imageBox.style.backgroundSize = 'cover'; // Cover ensures the image fits the box
-                imageBox.style.backgroundPosition = 'center';
+                imageBox.style.backgroundSize = "cover"; // Cover ensures the image fits the box
+                imageBox.style.backgroundPosition = "center";
             };
 
             reader.readAsDataURL(this.files[0]);
@@ -255,13 +293,13 @@ function deleteImageBox(id) {
 function createVideoBox(x, y, h, w, id) {
     const boxId = `video-box-${id}`;
     //const boxId = `video-box-${Object.keys(window.editors).length}`;
-    const videoBox = document.createElement('div');
+    const videoBox = document.createElement("div");
     videoBox.id = boxId;
-    videoBox.classList.add('video-box');
-    videoBox.style.position = 'absolute';
+    videoBox.classList.add("video-box");
+    videoBox.style.position = "absolute";
 
     // Calculate position and size based on container dimensions and provided data
-    const container = document.getElementById('container');
+    const container = document.getElementById("container");
     const containerRect = container.getBoundingClientRect();
 
     videoBox.style.left = `${(y / 12) * containerRect.width}px`;
@@ -269,25 +307,25 @@ function createVideoBox(x, y, h, w, id) {
     videoBox.style.width = `${(w / 12) * containerRect.width}px`;
     videoBox.style.height = `${(h / 16) * containerRect.height}px`;
 
-    videoBox.style.border = '1px dashed #ccc'; // A dashed border for the box
-    videoBox.style.cursor = 'pointer';
+    videoBox.style.border = "1px dashed #ccc"; // A dashed border for the box
+    videoBox.style.cursor = "pointer";
     videoBox.title = "Click to upload a video";
 
     // Create a hidden file input for video uploads
-    const fileInput = document.createElement('input');
-    fileInput.type = 'file';
-    fileInput.accept = 'video/*'; // Accept videos only
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = "video/*"; // Accept videos only
     fileInput.style.opacity = 0; // Hide the file input
-    fileInput.style.width = '100%';
-    fileInput.style.height = '100%';
+    fileInput.style.width = "100%";
+    fileInput.style.height = "100%";
 
     // Create a video element to play the uploaded video
-    const videoElement = document.createElement('video');
-    videoElement.style.width = '100%';
-    videoElement.style.height = '100%';
+    const videoElement = document.createElement("video");
+    videoElement.style.width = "100%";
+    videoElement.style.height = "100%";
     videoElement.controls = true; // Show video controls
 
-    fileInput.addEventListener('change', function() {
+    fileInput.addEventListener("change", function () {
         if (this.files && this.files[0]) {
             const url = URL.createObjectURL(this.files[0]);
             videoElement.src = url;

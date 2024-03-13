@@ -1,4 +1,4 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request
 from flask_cors import CORS
 from flask_socketio import SocketIO
 from flask_socketio import send, emit
@@ -7,6 +7,8 @@ import json
 import time
 import pyttsx3
 from threading import Thread
+from bson.json_util import dumps
+from pymongo import MongoClient
 
 app = Flask(__name__)
 CORS(app)
@@ -100,6 +102,38 @@ def send_data():
                 manage_bracket(emit_data, action="delete")
                 
         # time.sleep(5)
+
+
+uri = "mongodb+srv://bracketscluster.tnpze91.mongodb.net/?authSource=%24external&authMechanism=MONGODB-X509&retryWrites=true&w=majority&appName=BracketsCluster"
+client = MongoClient(uri,
+                    tls=True,
+                    tlsCertificateKeyFile='MongoDB.pem')
+
+db = client['TangibleGrid']
+collection = db['Brackets']
+
+                
+@app.route('/get_brackets', methods=['POST'])
+def handle_get_brackets():
+    if request.method == 'POST':
+        cursor = collection.find()
+        list_cur = list(cursor)
+        json = dumps(list_cur)
+        return json
+    
+@app.route('/watch_brackets', methods=['POST'])
+def handle_watch_brackets():
+    if request.method == 'POST':
+        try:
+            with collection.watch(full_document="updateLookup", max_await_time_ms=100) as stream:
+                for document in stream:
+                    return dumps(document)
+        except:
+            return []
+        finally:
+            stream.close()
+
+
 
 if __name__ == '__main__':
     socketio.run(app)
